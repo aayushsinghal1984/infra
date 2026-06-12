@@ -1,0 +1,137 @@
+name: 'Terraform scan init validate and plan template'
+
+on:
+  workflow_call:
+    inputs:
+      target_env:
+        required: true
+        type: string
+        description: 'Target Environment (sit, uat, production)'
+      working_dir:          
+        required: true
+        type: string
+      is_apply:
+        required: true
+        type: boolean
+        description: 'Set to true to run ONLY terraform apply from artifact'
+
+env:  
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: true
+  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+
+jobs:
+  core-engine:
+    name: 'Execute TF Ops'
+    runs-on: windows-latest
+    environment: ${{ inputs.target_env }}
+    
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - name: 'Checkout Source Code'
+        uses: actions/checkout@v4
+
+      - name: 'Azure Login (OIDC)'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+          
+      - name: 'Setup Terraform'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false 
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: 'Terraform Initialization'
+        shell: pwsh
+        run: |          
+          $envName = "${{ inputs.target_env }}"         
+          if ($envName -eq "development") { $envName = "dev" }          
+          $workspaceName = "OPA-$envName"
+          Write-Output "Targeting Workspace: $workspaceName"     
+          "TF_WORKSPACE=$workspaceName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $env:TF_WORKSPACE = $workspaceName        
+          terraform -chdir="${{ inputs.working_dir }}" init           
+
+      - name: 'Terraform Validate'
+        if: ${{ inputs.is_apply == false }}
+        shell: pwsh
+        run: terraform -chdir="${{ inputs.working_dir }}" validate
+        
+      - name: 'Setup TFLint'
+        if: ${{ inputs.is_apply == false }}
+        uses: terraform-linters/setup-tflint@v6.2.2
+        with:
+          tflint_version: latest
+
+      - name: 'Run TFLint Scan'
+        if: ${{ inputs.is_apply == false }}
+        shell: pwsh
+        run: |
+          tflint --init --chdir="${{ inputs.working_dir }}"
+          tflint -f compact --chdir="${{ inputs.working_dir }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   
+          
+      - name: 'Run tfsec Security Scan'
+        if: ${{ inputs.is_apply == false }}
+        shell: pwsh
+        run: |        
+          $tfsecVersion = "v1.28.14"
+          $downloadUrl = "https://github.com/aquasecurity/tfsec/releases/download/$tfsecVersion/tfsec-windows-amd64.exe"          
+          Invoke-WebRequest -Uri $downloadUrl -OutFile "tfsec.exe"          
+          ./tfsec.exe "${{ inputs.working_dir }}" --tfvars-file "${{ inputs.working_dir }}/terraform.tfvars"
+        continue-on-error: false         
+
+      - name: 'Generate Terraform Plan'
+        if: ${{ inputs.is_apply == false }}
+        shell: pwsh
+        run: |
+          $targetDir = "${{ inputs.working_dir }}"
+          if ([string]::IsNullOrWhiteSpace($targetDir)) { $targetDir = "." }
+          $jsonPath = Join-Path $env:GITHUB_WORKSPACE "$targetDir/tfplan.json"
+          
+          # Terraform plan generate
+          & terraform -chdir="$targetDir" plan -out="tfplan.binary"
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) { Write-Error "Plan Failed"; exit 1 }
+          & terraform -chdir="$targetDir" show -json tfplan.binary | Out-File -Encoding utf8 $jsonPath
+          
+          # Resource Counts Calculate
+          $create = jq -r '[.resource_changes[] | select(.change.actions[] == "create")] | length' $jsonPath
+          $update = jq -r '[.resource_changes[] | select(.change.actions[] == "update")] | length' $jsonPath
+          $delete = jq -r '[.resource_changes[] | select(.change.actions[] == "delete")] | length' $jsonPath
+          
+          # Summary Heading and Count Table
+          "Terraform Plan Summary" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+          "| Action | Count |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "| :--- | :--- |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "|  Create | $create |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "|  Update | $update |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "|  Delete | $delete |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          
+          # Detailed Resource List
+          "`n#  Detailed Resource Changes" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "| Resource Name | Action |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "| :--- | :--- |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8          
+          $resources = jq -r '.resource_changes[] | select(.change.actions[] != "no-op") | "\(.address) | \(.change.actions[])"' $jsonPath          
+          if (-not [string]::IsNullOrWhiteSpace($resources)) {
+              $resources | ForEach-Object { "| $_ |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
+          } else {
+              "| No changes detected | - |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+     
+      - name: 'Upload Terraform Plan Artifact'
+        if: ${{ inputs.is_apply == false }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ github.sha }}
+          path: ${{ github.workspace }}/${{ inputs.working_dir }}/tfplan.binary
+          retention-days: 1
