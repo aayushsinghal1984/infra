@@ -36,9 +36,9 @@ jobs:
       - name: 'Checkout Source Code'
         uses: actions/checkout@v4
 
-      - name: Install jq
+      - name: Install 
         shell: pwsh
-        run: choco install jq -y
+        run: choco install  -y
 
       - name: 'Azure Login (OIDC)'
         uses: azure/login@v2
@@ -105,19 +105,20 @@ jobs:
         run: |
           $targetDir = "${{ inputs.working_dir }}"
           if ([string]::IsNullOrWhiteSpace($targetDir)) { $targetDir = "." }
-          $jsonPath = Join-Path $env:GITHUB_WORKSPACE "$targetDir/tfplan.json"
-          $jqPath = (Get-Command jq).Source 
+          $jsonPath = Join-Path $env:GITHUB_WORKSPACE "$targetDir/tfplan.json"         
+          $Path = (Get-Command jq).Source 
+          
           # Terraform plan generate
           & terraform -chdir="$targetDir" plan -out="tfplan.binary"
           if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) { Write-Error "Plan Failed"; exit 1 }
           & terraform -chdir="$targetDir" show -json tfplan.binary | Out-File -Encoding utf8 $jsonPath
           
-          # Resource Counts Calculate
-          $create = jq -r '[.resource_changes[] | select(.change.actions[] == "create")] | length' $jsonPath
-          $update = jq -r '[.resource_changes[] | select(.change.actions[] == "update")] | length' $jsonPath
-          $delete = jq -r '[.resource_changes[] | select(.change.actions[] == "delete")] | length' $jsonPath
+          # Resource Counts Calculate 
+          $create = & $Path -r '[.resource_changes[] | select(.change.actions[] == "create")] | length' $jsonPath
+          $update = & $Path -r '[.resource_changes[] | select(.change.actions[] == "update")] | length' $jsonPath
+          $delete = & $Path -r '[.resource_changes[] | select(.change.actions[] == "delete")] | length' $jsonPath
           
-          # Summary Heading and Count Table
+          # Summary Table creation...
           "Terraform Plan Summary" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
           "| Action | Count |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           "| :--- | :--- |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
@@ -125,19 +126,18 @@ jobs:
           "|  Update | $update |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           "|  Delete | $delete |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           
-          #  Detailed Resource List
+          # Detailed Resource List 
           "`n#  Detailed Resource Changes" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           "| Resource Name | Action |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           "| :--- | :--- |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           
-          $resources = jq -r '.resource_changes[] | select(.change.actions[] != "no-op") | "\(.address) | \(.change.actions[])"' $jsonPath
+          $resources = & $Path -r '.resource_changes[] | select(.change.actions[] != "no-op") | "\(.address) | \(.change.actions[])"' $jsonPath
           
           if (-not [string]::IsNullOrWhiteSpace($resources)) {
               $resources | ForEach-Object { "| $_ |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
           } else {
               "| No changes detected | - |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }
-
       - name: 'Upload Terraform Plan Artifact'
         if: ${{ inputs.is_apply == false }}
         uses: actions/upload-artifact@v4
