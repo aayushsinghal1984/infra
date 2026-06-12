@@ -1,0 +1,11 @@
+name: Manual Validation Template
+
+on:
+  workflow_call:
+jobs:
+  validate:
+    runs-on: windows-latest
+    environment: manual-approval-gate    
+    steps:
+      - name: Awaiting Approval
+        run: Write-Output "Manual validation approved! Proceeding with the pipeline."
