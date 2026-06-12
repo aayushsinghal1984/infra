@@ -1,4 +1,4 @@
-name: 'Terraform Engine terra Template'
+name: 'Terraform init plan Template'
 
 on:
   workflow_call:
