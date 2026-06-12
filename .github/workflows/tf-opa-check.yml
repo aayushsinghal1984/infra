@@ -59,42 +59,32 @@ jobs:
           $targetDir = "${{ inputs.working_dir }}"
           if ([string]::IsNullOrWhiteSpace($targetDir)) { $targetDir = "." }
           $jsonPath = Join-Path $env:GITHUB_WORKSPACE "$targetDir/tfplan.json"
-          $opaResult = Join-Path $env:GITHUB_WORKSPACE "$targetDir/opa_result.json"
-          
+          $opaResult = Join-Path $env:GITHUB_WORKSPACE "$targetDir/opa_result.json"       
+          $jqPath = (Get-Command jq).Source          
           $moduleName = Split-Path $targetDir -Leaf
           $policyBundle = Join-Path $env:GITHUB_WORKSPACE "policies" $moduleName
           
           if (Test-Path $policyBundle) {
               "### Policy Bundle Used" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-              "$policyBundle" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-              
-              # OPA Eval with Call Operator (&)
-              & opa eval --format json --bundle "$policyBundle" "data" --input "$jsonPath" | Out-File -FilePath "$opaResult" -Encoding utf8
-              Write-Host "Checking OPA result file..."
-              Get-Content $opaResult
-              # Rule names with Call Operator (&)
-              $rulesChecked = & jq -r '.result[0].expressions[0].value | keys[]' "$opaResult"
-              
+              "$policyBundle" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8  
+              & opa eval --format json --bundle "$policyBundle" "data" --input "$jsonPath" | Out-File -FilePath "$opaResult" -Encoding utf8       
+
+              $rulesChecked = & $jqPath -r '.result[0].expressions[0].value | keys[]' "$opaResult"              
               " Rules Evaluated" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
               if ($rulesChecked) {
                   $rulesChecked | ForEach-Object { "- $_" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
-              }
-              
-              # Violation Check with Call Operator (&)
-              $violationCount = & jq -r '.result[0].expressions[0].value | .. | .deny? | select(. != null) | length' "$opaResult"
+              }            
+
+              $violationCount = & $jqPath -r '.result[0].expressions[0].value | .. | .deny? | select(. != null) | length' "$opaResult"
               if ([string]::IsNullOrWhiteSpace($violationCount)) { $violationCount = 0 }
               
               if ([int]$violationCount -gt 0) {
-              " OPA Status:  FAIL - $violationCount Violations Found" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+                  " OPA Status:  FAIL - $violationCount Violations Found" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
                   Write-Error "OPA Policy Violations Found!"
                   exit 1
               } else {
-              " OPA Status: PASS - Compliant" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+                  " OPA Status: PASS - Compliant" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
               }
           } else {
               " OPA Status: SKIPPED - No Policy Bundle Found at $policyBundle" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }
-
-
-    
-        
