@@ -36,6 +36,10 @@ jobs:
       - name: 'Checkout Source Code'
         uses: actions/checkout@v4
 
+      - name: Install jq
+        shell: pwsh
+        run: choco install jq -y
+
       - name: 'Azure Login (OIDC)'
         uses: azure/login@v2
         with:
