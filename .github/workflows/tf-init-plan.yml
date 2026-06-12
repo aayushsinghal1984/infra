@@ -106,7 +106,7 @@ jobs:
           $targetDir = "${{ inputs.working_dir }}"
           if ([string]::IsNullOrWhiteSpace($targetDir)) { $targetDir = "." }
           $jsonPath = Join-Path $env:GITHUB_WORKSPACE "$targetDir/tfplan.json"
-          
+          $jqPath = (Get-Command jq).Source 
           # Terraform plan generate
           & terraform -chdir="$targetDir" plan -out="tfplan.binary"
           if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) { Write-Error "Plan Failed"; exit 1 }
