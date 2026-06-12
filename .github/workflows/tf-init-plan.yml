@@ -44,6 +44,33 @@ jobs:
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
           enable-AzPSSession: true
           
+      - name: 'Setup TFLint'
+        if: ${{ inputs.is_apply == false }}
+        uses: terraform-linters/setup-tflint@v6.2.2
+        with:
+          tflint_version: latest
+  
+      - name: 'Run TFLint Scan'
+        if: ${{ inputs.is_apply == false }}
+        shell: pwsh
+        run: |
+          tflint --init --chdir="${{ inputs.working_dir }}"
+          tflint -f compact --chdir="${{ inputs.working_dir }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   
+          
+      - name: 'Run tfsec Security Scan'
+        if: ${{ inputs.is_apply == false }}
+        shell: pwsh
+        run: |        
+          $tfsecVersion = "v1.28.14"
+          $downloadUrl = "https://github.com/aquasecurity/tfsec/releases/download/$tfsecVersion/tfsec-windows-amd64.exe"
+          
+          Invoke-WebRequest -Uri $downloadUrl -OutFile "tfsec.exe"          
+          ./tfsec.exe "${{ inputs.working_dir }}" --tfvars-file "${{ inputs.working_dir }}/terraform.tfvars"
+        continue-on-error: false
+
+          
       - name: 'Setup Terraform'
         uses: hashicorp/setup-terraform@v3
         with:
@@ -58,8 +85,7 @@ jobs:
           $workspaceName = "OPA-$envName"
           Write-Output "Targeting Workspace: $workspaceName"     
           "TF_WORKSPACE=$workspaceName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          $env:TF_WORKSPACE = $workspaceName             
-          
+          $env:TF_WORKSPACE = $workspaceName          
           terraform -chdir="${{ inputs.working_dir }}" init      
         
 
