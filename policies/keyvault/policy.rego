@@ -6,12 +6,14 @@ import future.keywords.in
 
 # 1. Purge Protection check
 deny contains msg if {
-    rc := input.resource_changes[_]
-    rc.type == "azurerm_key_vault"
-    rc.change.after.purge_protection_enabled != false
-    msg := sprintf("Security Violation: Key Vault '%s' must have 'purge_protection_enabled' set to true to protect against accidental deletion.", [rc.change.after.name])
-}
+    some resource in input.resource_changes
+    resource.type == "azurerm_key_vault"
+    resource.change.actions[_] != "delete"  
+    purge_enabled := object.get(resource.change.after, "purge_protection_enabled", false)
+    purge_enabled == false
 
+    msg := sprintf("Security Violation: Key Vault '%v' must have 'purge_protection_enabled' set to true to protect against accidental deletion.", [resource.name])
+}
 # 2. Public Access check
 deny contains msg if {
     rc := input.resource_changes[_]
@@ -36,28 +38,15 @@ deny contains msg if {
 # Helper to get all resource changes by type
 resources_by_type(type) = [rc | rc := input.resource_changes[_]; rc.type == type; rc.change.actions[_] in {"create", "update"}]
 
-# 4. Purge Protection Check
-deny contains msg if {
-    rc := resources_by_type("azurerm_key_vault")[_]
-    not rc.change.after.purge_protection_enabled == true
-    msg := sprintf("Compliance Violation: Key Vault '%s' must have 'purge_protection_enabled' set to true.", [rc.change.after.name])
-}
 
-# 5. Public Network Access Check
-deny contains msg if {
-    rc := resources_by_type("azurerm_key_vault")[_]
-    rc.change.after.public_network_access_enabled != false
-    msg := sprintf("Security Violation: Key Vault '%s' must have 'public_network_access_enabled' set to false.", [rc.change.after.name])
-}
-
-# 6. Role-Based Access Control (RBAC) Check
+# 4. Role-Based Access Control (RBAC) Check
 deny contains msg if {
     rc := resources_by_type("azurerm_key_vault")[_]
     not rc.change.after.enable_rbac_authorization == true
     msg := sprintf("Security Violation: Key Vault '%s' must use Azure RBAC instead of Access Policies ('enable_rbac_authorization' must be true).", [rc.change.after.name])
 }
 
-# 7. Expiration Date Check for Keys
+# 5. Expiration Date Check for Keys
 deny contains msg if {
     rc := resources_by_type("azurerm_key_vault_key")[_]
     not rc.change.after.expiration_date
