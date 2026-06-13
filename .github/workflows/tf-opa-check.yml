@@ -67,15 +67,10 @@ jobs:
         shell: pwsh
         run: |
           $targetDir = "${{ inputs.working_dir }}"
-          $tfPath = (Get-Command terraform).Source
-          
-          # 1. Init चलाएं
-          & $tfPath -chdir="$targetDir" init -backend=false
-          
-          # 2. Show चलाएं और आउटपुट को पहले एक अस्थायी वेरिएबल में लें (पाइपलाइन न लगाएं)
-          $planJson = & $tfPath -chdir="$targetDir" show -json tfplan.binary
-          
-          # 3. JSON को सीधे फ़ाइल में लिखें
+          $tfPath = (Get-Command terraform).Source         
+          & $tfPath -chdir="$targetDir" init -backend=false        
+          $planJson = & $tfPath -chdir="$targetDir" show -json tfplan.binary          
+
           $planJson | Out-File -FilePath "$targetDir/tfplan.json" -Encoding utf8
       - name: 'Run OPA Policy Check'
         if: ${{ inputs.is_apply == false }}
@@ -85,10 +80,10 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($targetDir)) { $targetDir = "." }
           $jsonPath = Join-Path $env:GITHUB_WORKSPACE "$targetDir/tfplan.json"
           $opaResult = Join-Path $env:GITHUB_WORKSPACE "$targetDir/opa_result.json"
-          $jqPath = (Get-Command jq).Source
-          
-          
+          $jqPath = (Get-Command jq).Source         
           $policyBundle = Join-Path $env:GITHUB_WORKSPACE "policies"
+          Write-Host "Looking for policies in: $policyBundle"
+          Write-Host "Checking input JSON at: $jsonPath"
           
           if (Test-Path $policyBundle) {
               "Policy Bundle Used" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
