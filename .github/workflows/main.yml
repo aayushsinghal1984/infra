@@ -94,7 +94,7 @@ jobs:
   opa-check:
     name: 'OPA Policy Check'
     needs: [setup-env, terraform-plan]
-    if: needs.setup-env.outputs.skip_apply == 'true'
+    if: needs.setup-env.outputs.skip_apply == 'false'
     uses: ./.github/workflows/tf-opa-check.yml
     with:
       target_env: ${{ needs.setup-env.outputs.resolved_env }}
