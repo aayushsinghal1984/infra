@@ -40,18 +40,27 @@ jobs:
         shell: pwsh
         run: choco install jq -y
 
+      - name: 'Setup Open Policy Agent (OPA)'
+          if: ${{ inputs.is_apply == false }}
+          uses: open-policy-agent/setup-opa@v2
+          with:
+            version: 'v0.61.0'
+
       - name: 'Download Terraform Plan Artifact'
-        if: ${{ inputs.is_apply == true }}
+       # if: ${{ inputs.is_apply == true }}
         uses: actions/download-artifact@v4
         with:
           name: tfplan-${{ github.sha }}
           path: ${{ github.workspace }}/${{ inputs.working_dir }}
           
-      - name: 'Setup Open Policy Agent (OPA)'
-        if: ${{ inputs.is_apply == false }}
-        uses: open-policy-agent/setup-opa@v2
-        with:
-          version: 'v0.61.0' 
+      - name: 'Convert Binary Plan to JSON'
+          if: ${{ inputs.is_apply == false }}
+          shell: pwsh
+          run: |
+            $targetDir = "${{ inputs.working_dir }}"
+            terraform -chdir="$targetDir" show -json tfplan.binary | Out-File -Encoding utf8 "$targetDir/tfplan.json"
+          
+       
       - name: 'Run OPA Policy Check'
         if: ${{ inputs.is_apply == false }}
         shell: pwsh
