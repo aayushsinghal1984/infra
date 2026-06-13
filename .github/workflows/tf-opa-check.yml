@@ -95,6 +95,9 @@ jobs:
               
               
               & opa eval --format json --bundle "$policyBundle" "data" --input "$jsonPath" > "$opaResult"
+              Write-Host "--- OPA JSON OUTPUT START ---"
+              Get-Content "$opaResult"
+              Write-Host "--- OPA JSON OUTPUT END ---"
       
               
               if (Test-Path "$opaResult") {
