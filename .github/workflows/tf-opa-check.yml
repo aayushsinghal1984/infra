@@ -67,12 +67,16 @@ jobs:
         shell: pwsh
         run: |
           $targetDir = "${{ inputs.working_dir }}"
-          $tfPath = Join-Path $env:TERRAFORM_CLI_PATH "terraform.exe"      
-          & $tfPath -chdir="$targetDir" init -backend=false         
-          & $tfPath -chdir="$targetDir" show -json tfplan.binary > "$targetDir/tfplan.json"        
-          $content = Get-Content -Path "$targetDir/tfplan.json" -Raw
-          $content | Out-File -FilePath "$targetDir/tfplan.json" -Encoding utf8
-
+          $tfPath = (Get-Command terraform).Source
+          
+          # 1. Init चलाएं
+          & $tfPath -chdir="$targetDir" init -backend=false
+          
+          # 2. Show चलाएं और आउटपुट को पहले एक अस्थायी वेरिएबल में लें (पाइपलाइन न लगाएं)
+          $planJson = & $tfPath -chdir="$targetDir" show -json tfplan.binary
+          
+          # 3. JSON को सीधे फ़ाइल में लिखें
+          $planJson | Out-File -FilePath "$targetDir/tfplan.json" -Encoding utf8
       - name: 'Run OPA Policy Check'
         if: ${{ inputs.is_apply == false }}
         shell: pwsh
