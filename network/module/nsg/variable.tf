@@ -1,6 +1,6 @@
 variable "NSG" {
-  type = map(object({
-    description = "Map of Network Security Groups with their respective dynamic security rules."
+description = "Map of Network Security Groups with their respective dynamic security rules."
+  type = map(object({    
     NSGName             = string
     location            = string
     resource_group_name = string
