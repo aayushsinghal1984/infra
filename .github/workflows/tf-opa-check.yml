@@ -67,9 +67,11 @@ jobs:
         shell: pwsh
         run: |
           $targetDir = "${{ inputs.working_dir }}"
-          $tf = Get-Command terraform
-          & $tf -chdir="$targetDir" init -backend=false
-          & $tf -chdir="$targetDir" show -json tfplan.binary | Out-File -FilePath "$targetDir/tfplan.json" -Encoding utf8
+          $tfPath = Join-Path $env:TERRAFORM_CLI_PATH "terraform.exe"      
+          & $tfPath -chdir="$targetDir" init -backend=false         
+          & $tfPath -chdir="$targetDir" show -json tfplan.binary > "$targetDir/tfplan.json"        
+          $content = Get-Content -Path "$targetDir/tfplan.json" -Raw
+          $content | Out-File -FilePath "$targetDir/tfplan.json" -Encoding utf8
 
       - name: 'Run OPA Policy Check'
         if: ${{ inputs.is_apply == false }}
