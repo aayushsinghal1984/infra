@@ -1,4 +1,4 @@
-name: 'Terraform Engine terra Template'
+name: 'Terraform opa check and summary'
 
 on:
   workflow_call:
@@ -40,27 +40,36 @@ jobs:
         shell: pwsh
         run: choco install jq -y
 
+      - name: 'Setup Terraform'
+        uses: hashicorp/setup-terraform@v3
+
+      - name: 'Azure Login'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
       - name: 'Setup Open Policy Agent (OPA)'
-          if: ${{ inputs.is_apply == false }}
-          uses: open-policy-agent/setup-opa@v2
-          with:
-            version: 'v0.61.0'
+        if: ${{ inputs.is_apply == false }}
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: 'v0.61.0'
 
       - name: 'Download Terraform Plan Artifact'
-       # if: ${{ inputs.is_apply == true }}
         uses: actions/download-artifact@v4
         with:
           name: tfplan-${{ github.sha }}
           path: ${{ github.workspace }}/${{ inputs.working_dir }}
-          
+
       - name: 'Convert Binary Plan to JSON'
-          if: ${{ inputs.is_apply == false }}
-          shell: pwsh
-          run: |
-            $targetDir = "${{ inputs.working_dir }}"
-            terraform -chdir="$targetDir" show -json tfplan.binary | Out-File -Encoding utf8 "$targetDir/tfplan.json"
-          
-       
+        if: ${{ inputs.is_apply == false }}
+        shell: pwsh
+        run: |
+          $targetDir = "${{ inputs.working_dir }}"
+          terraform -chdir="$targetDir" init -backend=false
+          terraform -chdir="$targetDir" show -json tfplan.binary | Out-File -Encoding utf8 "$targetDir/tfplan.json"
+
       - name: 'Run OPA Policy Check'
         if: ${{ inputs.is_apply == false }}
         shell: pwsh
@@ -68,21 +77,16 @@ jobs:
           $targetDir = "${{ inputs.working_dir }}"
           if ([string]::IsNullOrWhiteSpace($targetDir)) { $targetDir = "." }
           $jsonPath = Join-Path $env:GITHUB_WORKSPACE "$targetDir/tfplan.json"
-          $opaResult = Join-Path $env:GITHUB_WORKSPACE "$targetDir/opa_result.json"       
-          $jqPath = (Get-Command jq).Source          
-          $moduleName = Split-Path $targetDir -Leaf
-          $policyBundle = Join-Path $env:GITHUB_WORKSPACE "policies" $moduleName
+          $opaResult = Join-Path $env:GITHUB_WORKSPACE "$targetDir/opa_result.json"
+          $jqPath = (Get-Command jq).Source
+          
+          
+          $policyBundle = Join-Path $env:GITHUB_WORKSPACE "policies"
           
           if (Test-Path $policyBundle) {
-              "### Policy Bundle Used" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+              "Policy Bundle Used" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
               "$policyBundle" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8  
-              & opa eval --format json --bundle "$policyBundle" "data" --input "$jsonPath" | Out-File -FilePath "$opaResult" -Encoding utf8       
-
-              $rulesChecked = & $jqPath -r '.result[0].expressions[0].value | keys[]' "$opaResult"              
-              " Rules Evaluated" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-              if ($rulesChecked) {
-                  $rulesChecked | ForEach-Object { "- $_" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
-              }            
+              & opa eval --format json --bundle "$policyBundle" "data" --input "$jsonPath" | Out-File -FilePath "$opaResult" -Encoding utf8
 
               $violationCount = & $jqPath -r '.result[0].expressions[0].value | .. | .deny? | select(. != null) | length' "$opaResult"
               if ([string]::IsNullOrWhiteSpace($violationCount)) { $violationCount = 0 }
