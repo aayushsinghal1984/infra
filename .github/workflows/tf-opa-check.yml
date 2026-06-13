@@ -82,7 +82,8 @@ jobs:
           $opaResult = Join-Path $env:GITHUB_WORKSPACE "$targetDir/opa_result.json"
           $jqPath = (Get-Command jq).Source
           $policyBundle = Join-Path $env:GITHUB_WORKSPACE "policies"
-          
+          Write-Host "OPA Raw Result:"
+          Get-Content "$opaResult"
           
           Write-Host "Looking for policies in: $policyBundle"
           Write-Host "Checking input JSON at: $jsonPath"
