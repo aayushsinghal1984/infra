@@ -32,7 +32,7 @@ resource "azurerm_kubernetes_cluster" "res-0" {
   automatic_upgrade_channel           = each.value.automatic_upgrade_channel != "" ? each.value.automatic_upgrade_channel : null
   azure_policy_enabled                = each.value.azure_policy_enabled 
   cost_analysis_enabled               = each.value.cost_analysis_enabled   
-  custom_ca_trust_certificates_base64 = length(each.value.custom_ca_trust_certificates_base64) > 0 ? each.value.custom_ca_trust_certificates_base64 : []
+# custom_ca_trust_certificates_base64 = length(each.value.custom_ca_trust_certificates_base64) > 0 ? each.value.custom_ca_trust_certificates_base64 : []
   disk_encryption_set_id              = each.value.disk_encryption_set_id != "" ? each.value.disk_encryption_set_id : null
   dns_prefix                          = each.value.dns_prefix 
   dns_prefix_private_cluster          = each.value.dns_prefix_private_cluster != "" ? each.value.dns_prefix_private_cluster : null
