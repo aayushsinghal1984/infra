@@ -60,7 +60,7 @@ variable "aks_cluster" {
     auto_scaling_enabled          = bool
     capacity_reservation_group_id = string
     fips_enabled                  = bool
-    gpu_driver                    = string
+   # gpu_driver                    = string
     gpu_instance                  = string
     host_encryption_enabled       = bool
     host_group_id                 = string
