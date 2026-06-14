@@ -10,7 +10,7 @@ variable "aks_cluster" {
     automatic_upgrade_channel           = string
     azure_policy_enabled                = bool
     cost_analysis_enabled               = bool
-    custom_ca_trust_certificates_base64 = list(string)
+  # custom_ca_trust_certificates_base64 = list(string)
     disk_encryption_set_id              = string
     dns_prefix                          = string
     dns_prefix_private_cluster          = string
