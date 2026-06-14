@@ -91,7 +91,7 @@ resource "azurerm_kubernetes_cluster" "res-0" {
     auto_scaling_enabled          = each.value.auto_scaling_enabled  
     capacity_reservation_group_id = each.value.capacity_reservation_group_id != "" ? each.value.capacity_reservation_group_id : null
     fips_enabled                  = each.value.fips_enabled 
-    gpu_driver                    = each.value.gpu_driver != "" ? each.value.gpu_driver : null
+    #gpu_driver                    = each.value.gpu_driver != "" ? each.value.gpu_driver : null
     gpu_instance                  = each.value.gpu_instance != "" ? each.value.gpu_instance : null
     host_encryption_enabled       = each.value.host_encryption_enabled
     host_group_id                 = each.value.host_group_id != "" ? each.value.host_group_id : null
