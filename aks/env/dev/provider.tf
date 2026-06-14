@@ -1,15 +1,17 @@
 terraform {
+  required_version = ">= 1.5.0"
+  cloud {
+    organization = "HCLIT"
+    workspaces {    
+    }
+  }
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "4.45.0"
+      version = "4.14.0"
     }
   }
 }
-
 provider "azurerm" {
-  subscription_id = "5e2ade1f-9bb8-4b4f-874f-5fd49f66c2fa"
-
   features {}
 }
-
