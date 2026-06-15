@@ -1,0 +1,63 @@
+name: 'Terraform Test Template'
+
+on:
+  workflow_call:
+    inputs:
+      target_env:
+        required: true
+        type: string
+        description: 'Target Environment (sit, uat, production)'
+      working_dir:
+        required: true
+        type: string
+
+env:
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: true
+  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+
+jobs:
+  test-engine:
+    name: 'Execute TF Test'
+    runs-on: windows-latest
+    environment: ${{ inputs.target_env }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: 'Checkout Source Code'
+        uses: actions/checkout@v4
+
+      - name: 'Azure Login (OIDC)'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      - name: 'Setup Terraform'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: 'Terraform Initialization'
+        shell: pwsh
+        run: |
+          $envName = "${{ inputs.target_env }}"
+          if ($envName -eq "development") { $envName = "dev" }
+          $workspaceName = "infra-$envName"
+          Write-Output "Targeting Workspace: $workspaceName"
+          "TF_WORKSPACE=$workspaceName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $env:TF_WORKSPACE = $workspaceName
+          terraform -chdir="${{ inputs.working_dir }}" init
+
+      - name: 'Run Terraform Test'
+        shell: pwsh
+        run: |
+          terraform -chdir="${{ inputs.working_dir }}" test

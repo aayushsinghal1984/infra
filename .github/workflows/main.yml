@@ -102,10 +102,20 @@ jobs:
       is_apply: false
     secrets: inherit
 
+  # STAGE 2.2: Terraform Test
+  terraform-test:
+    name: 'TF Test'
+    needs: [setup-env, terraform-plan]
+    uses: ./.github/workflows/tf-test.yml
+    with:
+      target_env: ${{ needs.setup-env.outputs.resolved_env }}
+      working_dir: ${{ needs.setup-env.outputs.resolved_dir }}
+    secrets: inherit
+
   # STAGE 3: Manual Approval Gate
   manual-validation:
     name: 'Manual Approval Gate'
-    needs: [setup-env, terraform-plan, opa-check]
+    needs: [setup-env, terraform-plan, opa-check, terraform-test]
     if: needs.setup-env.outputs.skip_apply == 'false'
     uses: ./.github/workflows/manual-validation.yml    
 
