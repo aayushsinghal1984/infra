@@ -84,7 +84,8 @@ jobs:
       - name: 'Terraform Initialization'
         shell: pwsh
         run: |          
-          $envName = "${{ inputs.target_env }}"         
+          $envName = "${{ inputs.target_env }}"  
+          # need to check 
           if ($envName -eq "development") { $envName = "dev" }          
           $workspaceName = "infra-$envName"
           Write-Output "Targeting Workspace: $workspaceName"     
