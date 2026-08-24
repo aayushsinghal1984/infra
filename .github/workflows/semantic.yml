@@ -16,7 +16,7 @@ on:
         default: 'storage_account'
         type: choice
         options:
-          - 'storage_account'
+          - 'aks'
           - 'network'
           - 'key_vault'
 
