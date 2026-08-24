@@ -59,7 +59,7 @@ jobs:
   release-modules:
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.modules != '[]' && needs.detect-changes.outputs.modules != '' }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         module: ${{ fromJson(needs.detect-changes.outputs.modules) }}
