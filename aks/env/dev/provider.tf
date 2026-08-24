@@ -4,6 +4,7 @@ terraform {
     organization = "HCLIT"
     workspaces {    
     }
+    
   }
   required_providers {
     azurerm = {
