@@ -1,0 +1,94 @@
+name: Dynamic Monorepo Module Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'modules/**'
+
+  # Manual Trigger Configuration
+  workflow_dispatch:
+    inputs:
+      module_name:
+        description: 'Select Module to Release Manually'
+        required: true
+        default: 'storage_account'
+        type: choice
+        options:
+          - 'storage_account'
+          - 'network'
+          - 'key_vault'
+
+permissions:
+  contents: write
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.set-modules.outputs.modules }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure Git Safe Directory
+        run: git config --global --add safe.directory '*'
+
+      # Automated Push Event Filter
+      - name: Check Changed Module Directories
+        if: ${{ github.event_name == 'push' }}
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            storage_account: 'modules/storage_account/**'
+            virtual_network: 'modules/virtual_network/**'
+            key_vault: 'modules/key_vault/**'
+
+      # Combine Manual Input or Automated Filter Output
+      - name: Set Target Modules Output
+        id: set-modules
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "modules=[\"${{ inputs.module_name }}\"]" >> $GITHUB_OUTPUT
+          else
+            echo "modules=${{ steps.filter.outputs.changes }}" >> $GITHUB_OUTPUT
+          fi
+
+  release-modules:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.modules != '[]' && needs.detect-changes.outputs.modules != '' }}
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        module: ${{ fromJson(needs.detect-changes.outputs.modules) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git Safe Directory
+        run: git config --global --add safe.directory '*'
+
+      - name: Calculate Version & Tag
+        id: semver
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          working_directory: modules/${{ matrix.module }}
+          tag_prefix: modules/${{ matrix.module }}-v
+          default_bump: patch
+
+      - name: Create GitHub Release
+        if: ${{ steps.semver.outputs.new_tag != '' && steps.semver.outputs.new_tag != null }}
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.semver.outputs.new_tag }}
+          name: ${{ matrix.module }} ${{ steps.semver.outputs.new_tag }}
+          body: ${{ steps.semver.outputs.changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: true
